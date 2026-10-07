@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Maliga Online Resize Image</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="wrap">
+    <section class="card">
+      <div class="hero">
+        <img class="passport-photo" src="{{ url_for('static', filename='maliga-passport.jpg') }}" alt="Maliga passport style photo">
+        <h1>Welcome for Maliga Online Resize Image</h1>
+        <p>Upload many images, resize them with good quality, then download one ZIP file containing all resized images.</p>
+      </div>
+
+      {% with messages = get_flashed_messages() %}
+        {% if messages %}<div class="notice">{{ messages[0] }}</div>{% endif %}
+      {% endwith %}
+
+      <div id="uploadSuccess" class="status success" role="status" aria-live="polite" hidden></div>
+      <div id="resizeStatus" class="status processing" role="status" aria-live="polite" hidden></div>
+      <div id="resizeSuccess" class="status success download-status" role="status" aria-live="polite" hidden>
+        <strong>Resize completed successfully.</strong>
+        <span>Your resized images are ready.</span>
+        <a id="downloadLink" class="download-link" href="#" download="resized-images.zip">Download Resized Images</a>
+      </div>
+
+      <form id="resizeForm" method="post" action="{{ url_for('index') }}" enctype="multipart/form-data">
+        <label class="upload">
+          <input id="images" type="file" name="images" accept=".jpg,.jpeg,.png,.webp,image/*" multiple required>
+          <strong>Choose images</strong>
+          <span>JPG, JPEG, PNG or WEBP · multiple files allowed</span>
+        </label>
+
+        <div class="mode-box">
+          <label><span>Resize mode</span>
+            <select name="resize_mode" id="resize_mode">
+              <option value="exact" selected>Exact Size — Smart Crop</option>
+              <option value="fit">Keep Original Ratio — Fit Inside</option>
+            </select>
+          </label>
+          <small><strong>Exact Size</strong> makes every image exactly the width and height you enter. It keeps proportions and crops the extra edges from the center, so images are not stretched.</small>
+        </div>
+
+        <div class="grid">
+          <label><span>Width (px)</span><input type="number" name="width" value="612" min="1" max="10000"></label>
+          <label><span>Height (px)</span><input type="number" name="height" value="408" min="1" max="10000"></label>
+          <label><span>Quality</span><input type="number" name="quality" value="85" min="40" max="100"></label>
+          <label><span>Output format</span>
+            <select name="output_format">
+              <option value="original">Keep original format</option>
+              <option value="webp">WEBP</option>
+              <option value="jpeg">JPEG</option>
+              <option value="png">PNG</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="hint"><strong>Example:</strong> Width <b>612</b> + Height <b>408</b> + <b>Exact Size — Smart Crop</b> = every image inside the ZIP will be exactly <b>612 × 408 px</b>.</div>
+        <button id="resizeButton" type="submit">Resize Images</button>
+      </form>
+    </section>
+  </main>
+
+  <script>
+    const form = document.getElementById('resizeForm');
+    const fileInput = document.getElementById('images');
+    const uploadSuccess = document.getElementById('uploadSuccess');
+    const resizeStatus = document.getElementById('resizeStatus');
+    const resizeSuccess = document.getElementById('resizeSuccess');
+    const downloadLink = document.getElementById('downloadLink');
+    const resizeButton = document.getElementById('resizeButton');
+    let downloadUrl = null;
+
+    fileInput.addEventListener('change', () => {
+      resizeSuccess.hidden = true;
+      resizeStatus.hidden = true;
+      if (downloadUrl) {
+        URL.revokeObjectURL(downloadUrl);
+        downloadUrl = null;
+      }
+
+      const count = fileInput.files.length;
+      if (count > 0) {
+        uploadSuccess.textContent = `Uploaded successfully — ${count} image${count === 1 ? '' : 's'} selected and ready to resize.`;
+        uploadSuccess.hidden = false;
+      } else {
+        uploadSuccess.hidden = true;
+      }
+    });
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+
+      if (!fileInput.files.length) {
+        uploadSuccess.textContent = 'Please choose at least one image.';
+        uploadSuccess.hidden = false;
+        return;
+      }
+
+      resizeSuccess.hidden = true;
+      resizeStatus.className = 'status processing';
+      resizeStatus.textContent = 'Resizing images... please wait.';
+      resizeStatus.hidden = false;
+      resizeButton.disabled = true;
+      resizeButton.textContent = 'Resizing...';
+
+      try {
+        const response = await fetch(form.action || window.location.href, {
+          method: 'POST',
+          body: new FormData(form)
+        });
+
+        if (!response.ok) {
+          throw new Error('Resize failed');
+        }
+
+        const contentType = response.headers.get('content-type') || '';
+        if (!contentType.includes('application/zip')) {
+          throw new Error('The server did not return a ZIP file');
+        }
+
+        const blob = await response.blob();
+        if (downloadUrl) URL.revokeObjectURL(downloadUrl);
+        downloadUrl = URL.createObjectURL(blob);
+        downloadLink.href = downloadUrl;
+
+        resizeStatus.hidden = true;
+        resizeSuccess.hidden = false;
+        resizeSuccess.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } catch (error) {
+        resizeStatus.textContent = 'Something went wrong while resizing. Please try again.';
+        resizeStatus.className = 'status error';
+        resizeStatus.hidden = false;
+      } finally {
+        resizeButton.disabled = false;
+        resizeButton.textContent = 'Resize Images';
+      }
+    });
+  </script>
+</body>
+</html>
